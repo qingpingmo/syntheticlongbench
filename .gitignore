@@ -1,0 +1,7 @@
+# Source and evaluator artifacts are intentionally local-only.
+source-data/
+private-review/
+
+# Local server and editor output
+*.log
+.DS_Store
