@@ -47,8 +47,12 @@ New-Item -ItemType Directory -Force -Path (Join-Path $privatePath "data\samples"
 New-Item -ItemType File -Force -Path (Join-Path $publicPath ".nojekyll") | Out-Null
 
 $catalog = @()
+$sourceRunCounts = @{}
 foreach ($file in $files) {
     $raw = Get-Content -LiteralPath $file.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    $runId = [string]$raw.provenance.run_id
+    if ([string]::IsNullOrWhiteSpace($runId)) { $runId = "unknown" }
+    if ($sourceRunCounts.ContainsKey($runId)) { $sourceRunCounts[$runId]++ } else { $sourceRunCounts[$runId] = 1 }
     $blueprint = $raw.blueprint
     $documents = @(
         foreach ($document in @($raw.documents)) {
@@ -103,11 +107,20 @@ foreach ($file in $files) {
     }
 }
 
+$sourceRuns = @(
+    $sourceRunCounts.GetEnumerator() |
+        Sort-Object Name |
+        ForEach-Object { [ordered]@{ run_id = $_.Key; sample_count = $_.Value } }
+)
+$languages = @($catalog.scenario.language | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+
 $catalogPayload = [ordered]@{
     dataset = [ordered]@{
         title = "Long Context Atlas"
         subtitle = "Synthetic, audited long-context tasks for single-turn RL"
-        source_run = "production-20260810-48k-singleturn-b128-r1"
+        source_run = if ($sourceRuns.Count -eq 1) { $sourceRuns[0].run_id } else { "mixed accepted-sample snapshot" }
+        source_runs = $sourceRuns
+        languages = $languages
         generated_at_utc = [DateTime]::UtcNow.ToString("o")
         sample_count = $catalog.Count
         privacy = "public-policy-view"
